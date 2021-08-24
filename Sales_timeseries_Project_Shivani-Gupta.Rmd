@@ -4,6 +4,9 @@ author: "Shivani Gupta"
 date: "07/08/2021"
 output: word_document
 ---
+
+# This project tries to predict sales of the given SKUs for the company using Time Series analysis
+
 # > Setting working directory
 
 ```{r}
@@ -18,7 +21,7 @@ Sales_data<-read.csv("sales_case_study.csv", header=T)
 head(Sales_data, 10)
 
 ```
-#Subsetting the dataframe into 3 SKUs
+# Subsetting the dataframe into 3 SKUs
 
 ```{r}
 ProductA<-subset(Sales_data, SKU=="ProductA")
