@@ -1,0 +1,246 @@
+---
+title: "Capstone project Sales prediction"
+author: "Shivani Gupta"
+date: "07/08/2021"
+output: word_document
+---
+# > Setting working directory
+
+```{r}
+path<-"D:/data science/Capstone Project"
+setwd(path)
+```
+
+# Reading the data file
+
+```{r}
+Sales_data<-read.csv("sales_case_study.csv", header=T)
+head(Sales_data, 10)
+
+```
+#Subsetting the dataframe into 3 SKUs
+
+```{r}
+ProductA<-subset(Sales_data, SKU=="ProductA")
+ProductB<-subset(Sales_data, SKU=="ProductB")
+ProductC<-subset(Sales_data, SKU=="ProductC")
+
+```
+
+**EDA**
+
+
+# Cleaning the Data set
+*Initial zero removal*
+There are some SKU’s for which initial week’s sales values are 0. It means sales started only after that period. Those weeks needs to be removed before fitting the data into the model.
+
+*considering Initial weeks to be till 5th week*
+*We remove zero sales upto 5th week for all SKUs if any.*
+```{r}
+library(dplyr)
+filter(ProductA, Sales=="0")
+ProductA<-ProductA[-c(1,2,3),]
+
+filter(ProductB, Sales=="0")
+# No initial zeros in Product B as NA values will be replaced by average on later step
+
+filter(ProductC, Sales=="0")
+# There are no initial zeros in Product C
+```
+
+*Duplicate Value Treatment*
+Removing duplicate rows
+```{r}
+duplicated(ProductA)
+ProductA[duplicated(ProductA),]
+ProductA<-distinct(ProductA)
+
+duplicated(ProductB)
+ProductB[duplicated(ProductB),]
+ProductB<-distinct(ProductB)
+
+duplicated(ProductC)
+ProductC[duplicated(ProductC),]
+ProductC<-distinct(ProductC)
+
+```
+
+*Missing Value Treatment*
+
+
+```{r}
+
+sum(is.na(ProductA))
+Averages<-ProductA %>% group_by(Season) %>% summarise(average = mean(Sales, na.rm=TRUE))
+ProductA[5,3]<-9600.125
+ProductA[15,3]<-9027.154
+ProductA[26,3]<-5942.091
+ProductA[27,3]<-5942.091
+
+sum(is.na(ProductB))
+AveragesB<-ProductB %>% group_by(Season) %>% summarise(average = mean(Sales, na.rm=TRUE))
+ProductB[1,3]<-397.8750
+ProductB[2,3]<-397.8750
+ProductB[3,3]<-397.8750
+
+sum(is.na(ProductC))
+
+# No NA values present in Product C
+```
+*Outlier treatment*
+Product A
+```{r}
+boxplot(ProductA$Sales)
+
+# No outlier in Product A
+```
+
+Product B
+```{r}
+
+boxplot(ProductB$Sales)
+# No outlier in Product B
+```
+
+# Replacing outlier with mean in Product C
+```{r}
+
+boxplot(ProductC$Sales)
+AveragesC<-ProductC %>% group_by(Season) %>% summarise(average = mean(Sales, na.rm=TRUE))
+outliers <- boxplot(ProductC$Sales, plot=FALSE)$out
+ProductC$Sales<-replace(ProductC$Sales, ProductC$Sales==52524,14072.385)
+
+```
+
+*Replacing negative values with zero*
+
+```{r}
+ProductA[ProductA$Sales<0,]
+
+ProductB[ProductB$Sales<0,]
+ProductB$Sales<-replace(ProductB$Sales, ProductB$Sales<0, 0)
+
+ProductC[ProductC$Sales<0,]
+ProductC$Sales<-replace(ProductC$Sales, ProductC$Sales<0, 0)
+
+```
+
+#Checking summary and structure
+
+```{r}
+summary(ProductA)
+str(ProductA)
+
+summary(ProductB)
+str(ProductB)
+
+summary(ProductC)
+str(ProductC)
+```
+# Visualising Data
+
+*Product A*
+
+```{r}
+plot.ts(ProductA$Sales, col="Red", main="Time series of Product A", ylab="Product A sales", xlab="Weeks")
+```
+*Product B*
+
+```{r}
+plot.ts(ProductB$Sales, col="Blue", main="Time series of Product B", ylab="Product B sales", xlab="Weeks")
+```
+*Product C*
+
+```{r}
+plot.ts(ProductC$Sales, col="Green", main="Time series of Product C", ylab="Product C sales", xlab="Weeks")
+
+```
+
+#Dividing into Training And Testing Dataset
+
+```{r}
+
+trainA<-ProductA[1:38,]
+TestA<-ProductA[39:49,]
+
+trainB<-ProductB[1:41,]
+TestB<-ProductB[42:52,]
+
+trainC<-ProductC[1:31,]
+TestC<-ProductC[32:42,]
+```
+
+# Fitting into model ARIMA
+
+```{r}
+
+#install.packages("forecast")
+library(forecast)
+fitA<-auto.arima(as.ts(trainA$Sales), stepwise=FALSE, approximation=FALSE)
+fitB<-auto.arima(as.ts(trainB$Sales), stepwise=FALSE, approximation=FALSE)
+fitC<-auto.arima(as.ts(trainC$Sales), stepwise=FALSE, approximation=FALSE)
+
+
+ForecastA <-forecast(fitA,h=11)
+ForecastB <-forecast(fitB,h=11)
+ForecastC <-forecast(fitC,h=11)
+
+
+accuracy(ForecastA,TestA$Sales)
+accuracy(ForecastB, TestB$Sales)
+accuracy(ForecastC, TestC$Sales)
+
+```
+# Forecasted data using ARIMA
+
+```{r}
+
+Fr_salesA<-data.frame(ForecastA)
+Fr_salesB<-data.frame(ForecastB)
+Fr_salesC<-data.frame(ForecastC)
+
+output_table<-read.csv("output.csv")
+Fr_salesA[,1]
+SKU<-output_table$SKU
+ISO_week<-output_table$ISO_Week
+Pred_Arima<-c(Fr_salesA$Point.Forecast,Fr_salesB$Point.Forecast,Fr_salesC$Point.Forecast)
+output<-data.frame(cbind(SKU,ISO_week,Pred_Arima))
+print(output)
+```
+
+# Fitting data into Model ETS
+
+
+```{r}
+modelA<-ets(trainA$Sales)
+modelB<-ets(trainB$Sales)
+modelC<-ets(trainC$Sales)
+
+PredictA<-predict(modelA, h=11)
+PredictB<-predict(modelB, h=11)
+PredictC<-predict(modelC, h=11)
+
+accuracy(PredictA,TestA$Sales)
+accuracy(PredictB, TestB$Sales)
+accuracy(PredictC, TestC$Sales)
+
+```
+#Forecasted data using ets
+
+
+```{r}
+Pr_salesA<-data.frame(PredictA)
+Pr_salesB<-data.frame(PredictB)
+Pr_salesC<-data.frame(PredictC)
+
+
+
+SKU<-output_table$SKU
+ISO_week<-output_table$ISO_Week
+Pred_Arima<-c(Fr_salesA$Point.Forecast,Fr_salesB$Point.Forecast,Fr_salesC$Point.Forecast)
+output<-data.frame(cbind(SKU,ISO_week,Pred_Arima))
+output$Pred_ets<-c(Pr_salesA$Point.Forecast,Pr_salesB$Point.Forecast,Pr_salesC$Point.Forecast)
+print(output)
+write.csv(output,'output.csv')
+```
+
